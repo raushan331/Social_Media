@@ -1,38 +1,52 @@
 import { Inngest } from "inngest";
-import User from "../models/User.js"; // ya folder rename karke ../models/User.js
+import User from "../models/User.js";
+import connectDB from "../configs/db.js";
 
 export const inngest = new Inngest({ id: "social2729" });
 
+const getFullName = (first_name, last_name) =>
+  [first_name, last_name].filter(Boolean).join(" ");
+
+// User create
 const syncUserCreation = inngest.createFunction(
   { id: "sync-user-from-clerk", triggers: [{ event: "clerk/user.created" }] },
   async ({ event }) => {
-    const { id, first_name, last_name, email_address, image_url } = event.data;
-    let username = email_address[0].email_address.split("@")[0];
+    await connectDB();
 
-    const user = await User.findOne({ username });
-    if (user) {
+    const { id, first_name, last_name, email_addresses, image_url } =
+      event.data;
+    const email = email_addresses[0].email_address;
+    let username = email.split("@")[0];
+
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
       username = username + Math.floor(Math.random() * 1000);
     }
 
     const userData = {
       _id: id,
-      email: email_address[0].email_address,
-      full_name: first_name + " " + last_name,
+      email,
+      full_name: getFullName(first_name, last_name),
       profile_picture: image_url,
       username,
     };
+
     await User.create(userData);
   },
 );
 
+// User update
 const syncUserUpdation = inngest.createFunction(
   { id: "update-user-from-clerk", triggers: [{ event: "clerk/user.updated" }] },
   async ({ event }) => {
-    const { id, first_name, last_name, email_address, image_url } = event.data;
+    await connectDB();
+
+    const { id, first_name, last_name, email_addresses, image_url } =
+      event.data;
 
     const updatedUserData = {
-      email: email_address[0].email_address,
-      full_name: first_name + " " + last_name,
+      email: email_addresses[0].email_address,
+      full_name: getFullName(first_name, last_name),
       profile_picture: image_url,
     };
 
@@ -40,9 +54,12 @@ const syncUserUpdation = inngest.createFunction(
   },
 );
 
+// User delete
 const syncUserDeletion = inngest.createFunction(
   { id: "delete-user-from-clerk", triggers: [{ event: "clerk/user.deleted" }] },
   async ({ event }) => {
+    await connectDB();
+
     const { id } = event.data;
     await User.findByIdAndDelete(id);
   },
