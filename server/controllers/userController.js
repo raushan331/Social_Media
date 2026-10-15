@@ -1,13 +1,15 @@
 // GET USER DATA USING USERID
 
-import { trusted } from "mongoose";
 import imagekit from "../configs/imageKit.js";
+import Connection from "../models/Connection.js";
 import User from "../models/User.js";
 import fs from "fs";
 
 export const getUserData = async (req, res) => {
   try {
     const { userId } = req.auth();
+    console.log("userId from token:", userId); // ye add karo
+
     const user = await User.findById(userId);
     if (!user) {
       return res.json({ success: false, message: "User not found" });
@@ -29,7 +31,7 @@ export const updateUserData = async (req, res) => {
     !username && (username = tempuser.username);
 
     if (tempuser.username !== username) {
-      const user = User.findOne({ username });
+      const user = await User.findOne({ username });
       if (user) {
         username = tempuser.username;
       }
@@ -171,6 +173,125 @@ export const unfollowUser = async (req, res) => {
       success: true,
       message: "you are no longer following this user ",
     });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// SEND CONNECTION REQUEST
+export const sendConnectionRequest = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { id } = req.body;
+
+    // Last 24 hours me kitni requests bheji
+    const last24Hours = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const connectionRequests = await Connection.find({
+      from_user_id: userId,
+      createdAt: { $gt: last24Hours },
+    });
+
+    if (connectionRequests.length >= 20) {
+      return res.json({
+        success: false,
+        message:
+          "You have sent more than 20 connection requests in the last 24 hours",
+      });
+    }
+
+    const connection = await Connection.findOne({
+      $or: [
+        { from_user_id: userId, to_user_id: id },
+        { from_user_id: id, to_user_id: userId },
+      ],
+    });
+
+    if (!connection) {
+      await Connection.create({
+        from_user_id: userId,
+        to_user_id: id,
+      });
+      return res.json({
+        success: true,
+        message: "connection request send successfully",
+      });
+    } else if (connection && connection.status === "accepted") {
+      return res.json({
+        success: false,
+        message: "You are already connected with the user",
+      });
+    }
+
+    return res.json({
+      success: false,
+      message: "Connection request pending ",
+    });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// get user connection
+
+export const getUserConnection = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const user = await User.findById(userId).populate(
+      "connections followers following",
+    );
+
+    const connections = user.connections;
+    const followers = user.connections;
+    const following = user.connections;
+
+    const pendingConnections = (
+      await Connection.find({
+        to_user_id,
+        status: "pending",
+      }).populate("from_user_id")
+    ).map((connection) => connection.from_user_id);
+
+    res.json({
+      success: true,
+      connections,
+      followers,
+      following,
+      pendingConnections,
+    });
+  } catch (error) {
+    console.log(error);
+    res.json({ success: false, message: error.message });
+  }
+};
+
+// Accept connection requset
+
+export const acceptConnectionRequest = async (req, res) => {
+  try {
+    const { userId } = req.auth();
+    const { id } = req.body;
+
+    const connection = await Connection.findOne({
+      from_user_id: id,
+      to_user_id: userId,
+    });
+
+    if (!connection) {
+      return req.json({ success: false, message: "connection not found" });
+    }
+
+    const user = await user.findById(userId);
+    user.connections.push(id);
+    await user.save();
+
+    const toUser = await user.findById(userId);
+    toUser.connections.push(userId);
+    await toUser.save();
+
+    connection.status = "accepted";
+    await connection.save();
   } catch (error) {
     console.log(error);
     res.json({ success: false, message: error.message });
