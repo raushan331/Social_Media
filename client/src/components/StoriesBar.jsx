@@ -4,12 +4,28 @@ import { Plus } from "lucide-react";
 import moment from "moment";
 import StoryModel from "./StoryModel";
 import StoryViewer from "./StoryViewer";
+import { useAuth } from "@clerk/clerk-react";
+import api from "../api/axios";
+import toast from "react-hot-toast";
 const StoriesBar = () => {
-  const [stories, setstories] = useState([]);
+  const { getToken } = useAuth();
+  const [stories, setStories] = useState([]);
   const [showModel, setShowModel] = useState(false);
   const [viewStory, setViewStory] = useState(null);
   const fetchStories = async () => {
-    setstories(dummyStoriesData);
+    try {
+      const token = await getToken();
+      const { data } = await api.get("api/story/get", {
+        headers: { Authorization: `Bearer ${await getToken()}` },
+      });
+      if (data.success) {
+        setStories(data.stories);
+      } else {
+        toast(data.message);
+      }
+    } catch (error) {
+      toast.error(error.message);
+    }
   };
 
   useEffect(() => {

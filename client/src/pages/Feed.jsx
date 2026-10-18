@@ -4,17 +4,34 @@ import Loading from "../components/Loading";
 import StoriesBar from "../components/StoriesBar";
 import PostCard from "../components/PostCard";
 import RecentMessages from "../components/RecentMessages";
+import { useAuth } from "@clerk/clerk-react";
+import api from "../api/axios";
+import toast from "react-hot-toast";
 
 const Feed = () => {
-  const [feeds, setfeeds] = useState([]);
+  const [feeds, setFeeds] = useState([]);
   const [loading, setloading] = useState(true);
+  const { getToken } = useAuth();
   const fetchfeeds = async () => {
-    setfeeds(dummyPostsData);
+    try {
+      setloading(true);
+      const { data } = await api.get("api/post/feed", {
+        headers: { Authorization: `Bearer ${await getToken()}` },
+      });
+
+      if (data.success) {
+        setFeeds(data.posts);
+      } else {
+        toast.error(data.message);
+      }
+    } catch (error) {
+      toast.error(data.message);
+    }
     setloading(false);
   };
   useEffect(() => {
     fetchfeeds();
-  });
+  }, []);
   return !loading ? (
     <div className="h-full overflow-y-scroll no-scrollbar py-10 xl:pr-5 flex items-start justify-center xl:gap-8">
       {/* story and post list */}
